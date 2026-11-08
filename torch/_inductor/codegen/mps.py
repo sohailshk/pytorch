@@ -196,7 +196,7 @@ class MetalExprPrinter(ExprPrinter_):
         c, p, q = (
             self.parenthesize(arg, PRECEDENCE["Atom"] - 0.5) for arg in expr.args
         )
-        return f"{c} ? {p} : {q}"
+        return f"({c} ? {p} : {q})"
 
 
 class MetalOverrides(OpOverrides):

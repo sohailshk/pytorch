@@ -131,6 +131,15 @@ class MPSBasicTests(TestCase):
 
         self.common(foo, (torch.rand(1024),))
 
+    def test_negative_index_dynamic_shapes(self):
+        # https://github.com/pytorch/pytorch/issues/201441
+        def fn(x):
+            idx = torch.arange(x.shape[-1], device=x.device)
+            return x[..., idx - 1]
+
+        x = torch.rand(4, 65, device=self.device)
+        self.assertEqual(torch.compile(fn, dynamic=True)(x), fn(x))
+
     @parametrize("dtype", all_mps_types_and(torch.bool, torch.complex64))
     def test_cast(self, dtype):
         self.common(lambda a: a.to(dtype), (torch.rand(1024),))
