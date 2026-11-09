@@ -8131,6 +8131,27 @@ class TestNNDeviceType(NNTestCase):
                     self.assertEqual(out[start:start + 8], ref)
             del outs
 
+    @dtypes(torch.float16, torch.bfloat16, torch.float32)
+    def test_normalize_zero_norm(self, device, dtype):
+        # The default eps=1e-12 is not representable in float16 (it rounds to 0),
+        # so clamp_min(eps) was a no-op and a zero vector evaluated 0 / 0 = nan.
+        x = torch.zeros(2, 4, device=device, dtype=dtype, requires_grad=True)
+        out = F.normalize(x, dim=1)
+        self.assertEqual(out, torch.zeros_like(out))
+        out.sum().backward()
+        self.assertTrue(torch.isfinite(x.grad).all())
+
+        out = torch.empty_like(x)
+        F.normalize(x.detach(), dim=1, out=out)
+        self.assertEqual(out, torch.zeros_like(out))
+
+    @dtypes(torch.float16, torch.float32)
+    def test_normalize_explicit_eps(self, device, dtype):
+        # A user-passed eps is used as given, not overridden by the dtype default.
+        x = torch.tensor([[2e-5, 0., 0.]], device=device, dtype=dtype)
+        self.assertEqual(F.normalize(x, dim=1, eps=1e-6), torch.tensor([[1., 0., 0.]], device=device, dtype=dtype))
+        self.assertEqual(F.normalize(x, dim=1, eps=1.), x)
+
     def test_glu_bfloat16(self, device):
         def test_dtype(fn, input, dtype):
             input = input.detach().clone().to(dtype=dtype).requires_grad_(True)
