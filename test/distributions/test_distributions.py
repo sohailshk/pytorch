@@ -1406,7 +1406,6 @@ class TestDistributionsDevice(DistributionsTestCase):
                 dist = Dist(**param)
                 self.assertTrue(repr(dist).startswith(dist.__class__.__name__))
 
-    @expectedFailureMPS
     def test_sample_detached(self):
         for Dist, params in _get_examples():
             for i, param in enumerate(params):
@@ -1437,7 +1436,6 @@ class TestDistributionsDevice(DistributionsTestCase):
                     msg=lambda msg: f"{msg}\n{Dist.__name__} example {i + 1}/{len(params)}, .rsample() does not require grad",
                 )
 
-    @expectedFailureMPS
     def test_enumerate_support_type(self):
         for Dist, params in _get_examples():
             for i, param in enumerate(params):
@@ -1512,7 +1510,6 @@ class TestDistributionsDevice(DistributionsTestCase):
                 except NotImplementedError:
                     pass
 
-    @expectedFailureMPS
     def test_distribution_expand(self):
         shapes = [torch.Size(), torch.Size((2,)), torch.Size((2, 1))]
         for Dist, params in _get_examples():
@@ -1547,7 +1544,6 @@ class TestDistributionsDevice(DistributionsTestCase):
                     except NotImplementedError:
                         pass
 
-    @expectedFailureMPS
     def test_distribution_subclass_expand(self):
         expand_by = torch.Size((2,))
         for Dist, params in _get_examples():
@@ -2367,7 +2363,6 @@ class TestDistributionsDevice(DistributionsTestCase):
 
         self._check_forward_ad(lambda x: x.uniform_())
 
-    @expectedFailureMPS
     @skipXPUIf(True, "https://github.com/intel/torch-xpu-ops/issues/3977")
     @skipCUDAIf(True, "https://github.com/pytorch/pytorch/issues/200652")
     @unittest.skipIf(not TEST_NUMPY, "NumPy not found")
@@ -4272,7 +4267,6 @@ class TestDistributionsDevice(DistributionsTestCase):
             invalid_sample = torch.cat([sample, sample.new_ones(1, dim)], dim=0)
             self.assertRaises(ValueError, lambda: lkj.log_prob(invalid_sample))
 
-    @expectedFailureMPS
     def test_independent_shape(self):
         for Dist, params in _get_examples():
             for param in params:
@@ -4314,7 +4308,6 @@ class TestDistributionsDevice(DistributionsTestCase):
                     except NotImplementedError:
                         pass
 
-    @expectedFailureMPS
     def test_independent_expand(self):
         for Dist, params in _get_examples():
             for param in params:
@@ -4369,7 +4362,6 @@ class TestDistributionsDevice(DistributionsTestCase):
             self.assertAlmostEqual(dist.log_prob(0), log_prob)
             self.assertAlmostEqual(dist.log_prob(0), scipy_dist.logpdf(0))
 
-    @expectedFailureMPS
     @set_default_dtype_if_supported(torch.double)
     def test_cdf_log_prob(self):
         # Tests if the differentiation of the CDF gives the PDF at a given value

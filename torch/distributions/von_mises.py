@@ -152,13 +152,20 @@ class VonMises(Distribution):
         )
         return log_prob
 
+    @staticmethod
+    def _to_sampling_precision(value: Tensor) -> Tensor:
+        # MPS has no float64, so sampling for MPS tensors runs on the CPU.
+        if value.device.type == "mps":
+            value = value.cpu()
+        return value.to(torch.double)
+
     @lazy_property
     def _loc(self) -> Tensor:
-        return self.loc.to(torch.double)
+        return self._to_sampling_precision(self.loc)
 
     @lazy_property
     def _concentration(self) -> Tensor:
-        return self.concentration.to(torch.double)
+        return self._to_sampling_precision(self.concentration)
 
     @lazy_property
     def _proposal_r(self) -> Tensor:
@@ -180,12 +187,17 @@ class VonMises(Distribution):
         Sampling is always done in double precision internally to avoid a hang
         in _rejection_sample() for small values of the concentration, which
         starts to happen for single precision around 1e-4 (see issue #88443).
+
+        On MPS, which has no float64, the samples are drawn on the CPU and moved
+        back, so they use the CPU random number generator: ``torch.manual_seed``
+        makes them repeatable, ``torch.mps.manual_seed`` alone does not, and each
+        call advances the CPU generator state.
         """
         shape = self._extended_shape(sample_shape)
-        x = torch.empty(shape, dtype=self._loc.dtype, device=self.loc.device)
+        x = torch.empty(shape, dtype=self._loc.dtype, device=self._loc.device)
         return _rejection_sample(
             self._loc, self._concentration, self._proposal_r, x
-        ).to(self.loc.dtype)
+        ).to(self.loc.device, self.loc.dtype)
 
     def expand(self, batch_shape, _instance=None):
         try:
