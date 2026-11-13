@@ -18034,6 +18034,19 @@ class TestFusionUtils(TestCase):
             self.assertEqual(weight.requires_grad, w_rg)
             self.assertEqual(bias.requires_grad, b_rg)
 
+    def test_fuse_linear_bn_eval_numerics(self):
+        x = torch.randn(5, 3)
+        for linear_bias, affine in itertools.product([True, False], [True, False]):
+            linear = torch.nn.Linear(3, 4, bias=linear_bias).eval()
+            bn = torch.nn.BatchNorm1d(4, affine=affine).eval()
+            bn.running_mean.normal_()
+            bn.running_var.uniform_(0.5, 2.0)
+            if affine:
+                bn.weight.data.normal_()
+                bn.bias.data.normal_()
+            fused = torch.nn.utils.fusion.fuse_linear_bn_eval(linear, bn)
+            self.assertEqual(fused(x), bn(linear(x)))
+
 class TestUtils(TestCase):
     hw_classification = HardwareClassification.GENERIC
 

@@ -165,8 +165,8 @@ def fuse_linear_bn_weights(
     bn_rm: torch.Tensor,
     bn_rv: torch.Tensor,
     bn_eps: float,
-    bn_w: torch.Tensor,
-    bn_b: torch.Tensor,
+    bn_w: torch.Tensor | None,
+    bn_b: torch.Tensor | None,
 ) -> tuple[torch.nn.Parameter, torch.nn.Parameter]:
     r"""Fuse linear module parameters and BatchNorm module parameters into new linear module parameters.
 
@@ -176,8 +176,8 @@ def fuse_linear_bn_weights(
         bn_rm (torch.Tensor): BatchNorm running mean.
         bn_rv (torch.Tensor): BatchNorm running variance.
         bn_eps (float): BatchNorm epsilon.
-        bn_w (torch.Tensor): BatchNorm weight.
-        bn_b (torch.Tensor): BatchNorm bias.
+        bn_w (Optional[torch.Tensor]): BatchNorm weight.
+        bn_b (Optional[torch.Tensor]): BatchNorm bias.
 
     Returns:
         Tuple[torch.nn.Parameter, torch.nn.Parameter]: Fused linear weight and bias.
@@ -186,6 +186,10 @@ def fuse_linear_bn_weights(
     linear_bias_dtype = linear_b.dtype if linear_b is not None else linear_weight_dtype
     if linear_b is None:
         linear_b = torch.zeros_like(bn_rm)
+    if bn_w is None:
+        bn_w = torch.ones_like(bn_rm)
+    if bn_b is None:
+        bn_b = torch.zeros_like(bn_rm)
     bn_scale = bn_w * torch.rsqrt(bn_rv + bn_eps)
 
     fused_w = linear_w * bn_scale.unsqueeze(-1).to(dtype=linear_weight_dtype)
