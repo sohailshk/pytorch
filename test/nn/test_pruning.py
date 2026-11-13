@@ -513,6 +513,23 @@ class TestPruningNN(NNTestCase):
         nparams_pruned = torch.sum(computed_mask == 0)
         self.assertEqual(nparams_toprune, nparams_pruned)
 
+    def test_unstructured_pruning_channels_last(self):
+        # https://github.com/pytorch/pytorch/issues/96743
+        conv = nn.Conv2d(3, 4, 3)
+        conv_cl = nn.Conv2d(3, 4, 3)
+        conv_cl.load_state_dict(conv.state_dict())
+        conv_cl.to(memory_format=torch.channels_last)
+        self.assertFalse(conv_cl.weight.is_contiguous())
+
+        prune.l1_unstructured(conv, "weight", amount=0.5)
+        prune.l1_unstructured(conv_cl, "weight", amount=0.5)
+        self.assertEqual(conv_cl.weight_mask, conv.weight_mask)
+        self.assertEqual(conv_cl.weight, conv.weight)
+
+        conv_rand = nn.Conv2d(3, 4, 3).to(memory_format=torch.channels_last)
+        prune.random_unstructured(conv_rand, "weight", amount=0.5)
+        self.assertEqual(int(conv_rand.weight_mask.sum()), 54)
+
     def test_random_structured_pruning_amount(self):
         AMOUNT = 0.6
         AXIS = 2

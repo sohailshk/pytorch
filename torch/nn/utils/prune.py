@@ -475,7 +475,7 @@ class RandomUnstructured(BasePruningMethod):
 
         if nparams_toprune != 0:  # k=0 not supported by torch.kthvalue
             prob = torch.rand_like(t)
-            topk = torch.topk(prob.view(-1), k=nparams_toprune)
+            topk = torch.topk(prob.reshape(-1), k=nparams_toprune)
             mask.view(-1)[topk.indices] = 0
 
         return mask
@@ -533,7 +533,7 @@ class L1Unstructured(BasePruningMethod):
         if nparams_toprune != 0:  # k=0 not supported by torch.kthvalue
             # largest=True --> top k; largest=False --> bottom k
             # Prune the smallest k
-            topk = torch.topk(torch.abs(t).view(-1), k=nparams_toprune, largest=False)
+            topk = torch.topk(t.abs().reshape(-1), k=nparams_toprune, largest=False)
             # topk will have .indices and .values
             mask.view(-1)[topk.indices] = 0
 
