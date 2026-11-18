@@ -3045,9 +3045,9 @@ class CppVecKernel(CppKernel):
         with code.indent():
             result_size = get_result_size(dtype)
             tiling_size = get_tiling_size(dtype)
-            result_declare = (
-                f"__at_align__ std::array<{DTYPE_TO_CPP[dtype]}, {tiling_size}> tmpbuf;"
-            )
+            # Masked-out lanes are never written; zero them so the reload is defined.
+            zero_init = "{}" if self._load_mask is not None else ""
+            result_declare = f"__at_align__ std::array<{DTYPE_TO_CPP[dtype]}, {tiling_size}> tmpbuf{zero_init};"
             code.writeline(result_declare)
             if store_value:
                 code.writeline(

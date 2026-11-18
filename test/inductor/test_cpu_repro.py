@@ -6905,6 +6905,19 @@ class CPUReproTests(TestCase):
         self.common(fn, (x,))
         check_metrics_vec_kernel_count(1)
 
+    @requires_vectorization
+    @config.patch({"debug_index_asserts": False, "cpp.min_chunk_size": 512})
+    def test_masked_gather_load_zero_inits_buffer(self):
+        # The class-wide debug_index_asserts / min_chunk_size=1 settings hide the bug.
+        def fn(grad, x):
+            return torch.ops.aten.reflection_pad1d_backward(grad, x, [2, 1])
+
+        x = torch.randn(1, 1, 6)
+        grad = torch.randn(1, 1, 9)
+        actual, code = run_and_get_cpp_code(torch.compile(fn), grad, x)
+        self.assertEqual(actual, fn(grad, x))
+        FileCheck().check("tmpbuf{};").run(code)
+
     def test_masked_handle_scalar_var(self):
         def fn():
             # Simplified reproducer of https://github.com/pytorch/pytorch/issues/173626
