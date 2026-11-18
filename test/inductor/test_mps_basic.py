@@ -476,6 +476,23 @@ class MPSBasicTests(TestCase):
         x = torch.randn(1, 65536, dtype=torch.bfloat16)
         self.common(fn, (x,), check_lowp=False)
 
+    @parametrize("dynamic", [False, True])
+    @parametrize("n", [17, 33, 64, 100])
+    def test_int64_reduction_partial_simdgroup(self, n, dynamic):
+        # int64 max/min and integer prod run emulated simd ops that read 0 from
+        # inactive lanes, which wins for negative maxima, positive minima and prod
+        x = (torch.arange(n, device=self.device) % 5 + 1).repeat(2, 1)
+        x[1] = x[1].flip(0)
+        for fn, inp in (
+            (lambda t: t.amin(1), x),
+            (lambda t: t.argmin(1), x),
+            (lambda t: t.amax(1), -x),
+            (lambda t: t.argmax(1), -x),
+            (lambda t: t.prod(1), (x == 1).to(torch.int32) + 1),
+        ):
+            torch._dynamo.reset()
+            self.assertEqual(torch.compile(fn, dynamic=dynamic)(inp), fn(inp))
+
     @parametrize("shape", [(4, 5000), (3, 1023), (7, 1025), (5, 32), (1, 30000)])
     def test_welford_reduction_dynamic_shape(self, shape):
         # (5, 32): single-stage welford_reduce

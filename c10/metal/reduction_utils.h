@@ -382,8 +382,12 @@ IDX_T threadgroup_argmax(
     idx_data[idx / simdgroup_size] = rc.second;
   }
   ::metal::threadgroup_barrier(::metal::mem_flags::mem_threadgroup);
-  if (idx < ((size + simdgroup_size - 1) / simdgroup_size)) {
-    auto rc1 = simd_argmax(arg_data[idx], idx_data[idx]);
+  // Whole first simdgroup must stay active, see threadgroup_max. Lanes past
+  // nsimd re-read the last partial, which argmax/argmin are idempotent over.
+  const auto nsimd = (size + simdgroup_size - 1) / simdgroup_size;
+  if (idx < simdgroup_size) {
+    const auto src = ::metal::min(idx, nsimd - 1);
+    auto rc1 = simd_argmax(arg_data[src], idx_data[src]);
     if (idx == 0) {
       idx_data[0] = rc1.second;
     }
@@ -409,8 +413,10 @@ IDX_T threadgroup_argmin(
     idx_data[idx / simdgroup_size] = rc.second;
   }
   ::metal::threadgroup_barrier(::metal::mem_flags::mem_threadgroup);
-  if (idx < ((size + simdgroup_size - 1) / simdgroup_size)) {
-    auto rc1 = simd_argmin(arg_data[idx], idx_data[idx]);
+  const auto nsimd = (size + simdgroup_size - 1) / simdgroup_size;
+  if (idx < simdgroup_size) {
+    const auto src = ::metal::min(idx, nsimd - 1);
+    auto rc1 = simd_argmin(arg_data[src], idx_data[src]);
     if (idx == 0) {
       idx_data[0] = rc1.second;
     }

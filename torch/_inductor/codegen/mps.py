@@ -20,6 +20,7 @@ from torch.utils._sympy.functions import Min
 from torch.utils._sympy.printers import CppPrinter, ExprPrinter as ExprPrinter_
 from torch.utils._sympy.value_ranges import ValueRanges
 
+from .. import ir
 from ..codecache import code_hash, get_path
 from ..scheduler import WhyNoFuse
 from ..utils import ceildiv, get_bounds_index_expr, get_kernel_metadata, Placeholder
@@ -675,6 +676,43 @@ class MetalKernel(SIMDKernel):
         rnumel = self.features.reduction_numel
         if isinstance(rnumel, sympy.Integer) and rnumel < self.simd_group_size:
             self.max_threadgroup_size = 1
+        elif (
+            isinstance(rnumel, sympy.Integer)
+            and rnumel < self.max_threadgroup_size
+            and rnumel % self.simd_group_size != 0
+            and self._has_emulated_64bit_simd_reduction()
+        ):
+            # The emulated 64-bit simd ops (see c10/metal/reduction_utils.h) read
+            # 0 from the inactive lanes of a partial simdgroup, which wins over
+            # the real values of e.g. an all-negative max or any prod.
+            # Launch only whole simdgroups and let the in-kernel loop cover the tail.
+            self.max_threadgroup_size = (
+                int(rnumel) // self.simd_group_size * self.simd_group_size
+            )
+
+    def _reduction_threads(self, numel: sympy.Expr) -> sympy.Expr:
+        threads = Min(numel, self.max_threadgroup_size)  # type: ignore[misc]
+        if (
+            not isinstance(numel, sympy.Integer)
+            and self._has_emulated_64bit_simd_reduction()
+        ):
+            # Dynamic reduction size: launch whole simdgroups. The extra threads
+            # leave the accumulator at its identity (they break out of the
+            # in-kernel loop) and only take part in the simd reductions.
+            threads = ceildiv(threads, self.simd_group_size) * self.simd_group_size
+        return threads
+
+    def _has_emulated_64bit_simd_reduction(self) -> bool:
+        # Integer prods are promoted to int64 before the reduction
+        for node in self.features.reduction_nodes():
+            red = getattr(node.node, "data", None)
+            if (
+                isinstance(red, ir.Reduction)
+                and red.src_dtype == torch.int64
+                and red.reduction_type in ("max", "min", "argmax", "argmin", "prod")
+            ):
+                return True
+        return False
 
     def dtype_to_str(self, dtype: torch.dtype) -> str:
         return DTYPE_TO_METAL[dtype]
@@ -1301,7 +1339,7 @@ class MetalKernel(SIMDKernel):
             strided = self.grid_stride_prefixes()
             threads = [
                 expr_printer(
-                    Min(v.numel, self.max_threadgroup_size)  # type: ignore[misc]
+                    self._reduction_threads(v.numel)
                     if v.is_reduction
                     else Min(v.numel, self.grid_stride)  # type: ignore[misc]
                     if v.prefix in strided
@@ -1318,7 +1356,7 @@ class MetalKernel(SIMDKernel):
 
         if self.inside_reduction and self.max_threadgroup_size > 1:
             threads = [
-                expr_printer(Min(v.numel, self.max_threadgroup_size))  # type: ignore[misc]
+                expr_printer(self._reduction_threads(v.numel))
                 if v.is_reduction
                 else "1"
                 for v in self.active_range_trees()
